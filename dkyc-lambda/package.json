@@ -1,0 +1,9 @@
+{
+  "name": "dkyc-lambda",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "ethers": "^6.15.0"
+  }
+}
