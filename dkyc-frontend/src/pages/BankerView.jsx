@@ -1,62 +1,91 @@
+// src/BankerView.jsx
 import React, { useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function BankerView() {
-  const [customerAddress, setCustomerAddress] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [result, setResult] = useState(null);
   const [status, setStatus] = useState("");
-  const [kyc, setKyc] = useState(null);
 
   const fetchKYC = async () => {
-    if (!customerAddress.startsWith("0x") || customerAddress.length !== 42) {
-      alert("Enter valid customer Ethereum wallet address");
+    if (!customer) {
+      setStatus("❌ Enter a customer wallet address.");
       return;
     }
 
     try {
-      setStatus("⏳ Fetching KYC...");
-      const res = await fetch(`${API_BASE}/get-dkyc?address=${customerAddress}`);
+      setStatus("⏳ Fetching KYC from blockchain...");
+      setResult(null);
+
+      const res = await fetch(`${API_BASE}/get-dkyc?address=${customer}`);
       const data = await res.json();
 
       if (!res.ok) {
-        setStatus(`❌ Error: ${data.error}`);
+        setStatus(`❌ Error: ${data.error || "Unknown error"}`);
         return;
       }
 
-      setKyc(data);
-      setStatus("✅ KYC retrieved!");
-
+      setResult(data);
+      setStatus("✅ KYC record retrieved.");
     } catch (err) {
       setStatus("❌ Failed: " + err.message);
     }
   };
 
   return (
-    <div style={{ maxWidth: 800, margin: "2rem auto" }}>
-      <h2>🏦 Banker View</h2>
+    <div style={{ maxWidth: 700, margin: "2rem auto", textAlign: "center" }}>
+      <h2>🏦 Banker / Validator View</h2>
 
       <input
         type="text"
-        placeholder="Customer Wallet Address (0x...)"
-        value={customerAddress}
-        onChange={(e) => setCustomerAddress(e.target.value)}
-        style={{ width: "100%", marginBottom: 10 }}
+        placeholder="Customer wallet address (0x...)"
+        value={customer}
+        onChange={(e) => setCustomer(e.target.value.trim())}
+        style={{ width: "100%", marginBottom: 8 }}
       />
-
       <button onClick={fetchKYC}>🔍 Fetch KYC</button>
 
-      <pre style={{ marginTop: 20, padding: 10, background: "#f6f8fa" }}>
+      <pre
+        style={{
+          background: "#f6f8fa",
+          marginTop: 16,
+          padding: 12,
+          textAlign: "left",
+          whiteSpace: "pre-wrap"
+        }}
+      >
         {status}
       </pre>
 
-      {kyc && (
-        <div style={{ marginTop: 20, padding: 15, background: "#e8f5e9" }}>
-          <h3>KYC Details</h3>
-          <p><strong>Name:</strong> {kyc.name}</p>
-          <p><strong>DOB:</strong> {kyc.dob}</p>
-          <p><strong>Address:</strong> {kyc.homeAddress}</p>
-          <p><strong>Hash:</strong> {kyc.documentHash}</p>
-          <p><strong>Verified:</strong> {kyc.verified ? "✔️ Yes" : "❌ No"}</p>
+      {result && (
+        <div
+          style={{
+            marginTop: 16,
+            textAlign: "left",
+            background: "#fff",
+            border: "1px solid #ddd",
+            padding: 12
+          }}
+        >
+          <p>
+            <strong>Customer:</strong> {result.customer}
+          </p>
+          <p>
+            <strong>Name:</strong> {result.name}
+          </p>
+          <p>
+            <strong>DOB:</strong> {result.dob}
+          </p>
+          <p>
+            <strong>Address:</strong> {result.homeAddress}
+          </p>
+          <p>
+            <strong>Document Hash:</strong> {result.documentHash}
+          </p>
+          <p>
+            <strong>Verified:</strong> {result.isVerified ? "✅ Yes" : "❌ No"}
+          </p>
         </div>
       )}
     </div>

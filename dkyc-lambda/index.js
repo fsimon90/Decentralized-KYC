@@ -1,6 +1,5 @@
 /// **** index.js for DKYC-Lambda (Single Lambda Version) *** ///
 
-
 const { ethers } = require("ethers");
 const abi = require("./abi.json");
 

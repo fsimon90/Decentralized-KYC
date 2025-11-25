@@ -1,37 +1,8 @@
 [
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "_verificationFee", "type": "uint256" }
-    ],
+    "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "customer", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "bank", "type": "address" }
-    ],
-    "name": "AccessGranted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "customer", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "bank", "type": "address" }
-    ],
-    "name": "AccessRevoked",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "DepositReceived",
-    "type": "event"
   },
   {
     "anonymous": false,
@@ -40,6 +11,15 @@
       { "indexed": false, "internalType": "bytes32", "name": "documentHash", "type": "bytes32" }
     ],
     "name": "KYCSubmitted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "customer", "type": "address" },
+      { "indexed": false, "internalType": "bytes32", "name": "newDocumentHash", "type": "bytes32" }
+    ],
+    "name": "KYCUpdated",
     "type": "event"
   },
   {
@@ -76,47 +56,80 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "Withdrawn",
-    "type": "event"
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "address", "name": "_validator", "type": "address" }
-    ],
+    "inputs": [],
+    "name": "verificationFee",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "validators",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_newFee", "type": "uint256" }],
+    "name": "setVerificationFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_validator", "type": "address" }],
     "name": "addValidator",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
-    "name": "deposits",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getContractBalance",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "stateMutability": "view",
+    "inputs": [{ "internalType": "address", "name": "_validator", "type": "address" }],
+    "name": "removeValidator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "address", "name": "_customer", "type": "address" }
+      { "internalType": "address", "name": "_customer", "type": "address" },
+      { "internalType": "string", "name": "_name", "type": "string" },
+      { "internalType": "string", "name": "_dob", "type": "string" },
+      { "internalType": "string", "name": "_homeAddress", "type": "string" }
     ],
+    "name": "submitKYC",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_customer", "type": "address" },
+      { "internalType": "string", "name": "_name", "type": "string" },
+      { "internalType": "string", "name": "_dob", "type": "string" },
+      { "internalType": "string", "name": "_homeAddress", "type": "string" }
+    ],
+    "name": "updateKYC",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_customer", "type": "address" }],
+    "name": "verifyKYC",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_customer", "type": "address" }],
     "name": "getKYCInfo",
     "outputs": [
       { "internalType": "string", "name": "name", "type": "string" },
@@ -130,93 +143,7 @@
   },
   {
     "inputs": [
-      { "internalType": "address", "name": "_bank", "type": "address" }
-    ],
-    "name": "grantAccess",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "_validator", "type": "address" }
-    ],
-    "name": "removeValidator",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "_bank", "type": "address" }
-    ],
-    "name": "revokeAccess",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "_newFee", "type": "uint256" }
-    ],
-    "name": "setVerificationFee",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "string", "name": "_name", "type": "string" },
-      { "internalType": "string", "name": "_dob", "type": "string" },
-      { "internalType": "string", "name": "_homeAddress", "type": "string" },
-      { "internalType": "bytes32", "name": "_documentHash", "type": "bytes32" }
-    ],
-    "name": "submitKYC",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "string", "name": "_name", "type": "string" },
-      { "internalType": "string", "name": "_dob", "type": "string" },
-      { "internalType": "string", "name": "_homeAddress", "type": "string" },
-      { "internalType": "bytes32", "name": "_documentHash", "type": "bytes32" }
-    ],
-    "name": "updateKYC",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "verificationFee",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "_customer", "type": "address" }
-    ],
-    "name": "verifyKYC",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
+      { "internalType": "address payable", "name": "_to", "type": "address" },
       { "internalType": "uint256", "name": "_amount", "type": "uint256" }
     ],
     "name": "withdraw",

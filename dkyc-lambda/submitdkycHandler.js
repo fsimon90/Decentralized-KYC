@@ -1,3 +1,6 @@
+// submitdkycHandler.js
+// Updated to support customer address as input (Metamask address)
+
 const { ethers } = require("ethers");
 const abi = require("./abi.json");
 
@@ -10,14 +13,14 @@ function init() {
   const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
   let PRIVATE_KEY = process.env.PRIVATE_KEY;
 
-  if (!RPC_URL) throw new Error("Missing RPC_URL");
-  if (!CONTRACT_ADDRESS) throw new Error("Missing CONTRACT_ADDRESS");
-  if (!PRIVATE_KEY) throw new Error("Missing PRIVATE_KEY");
+  if (!RPC_URL || !CONTRACT_ADDRESS || !PRIVATE_KEY) {
+    throw new Error("Missing environment variables");
+  }
 
   if (!PRIVATE_KEY.startsWith("0x")) PRIVATE_KEY = "0x" + PRIVATE_KEY;
 
   provider = new ethers.JsonRpcProvider(RPC_URL);
-  wallet   = new ethers.Wallet(PRIVATE_KEY, provider);
+  wallet = new ethers.Wallet(PRIVATE_KEY, provider);
   contract = new ethers.Contract(CONTRACT_ADDRESS, abi, wallet);
 }
 
@@ -30,9 +33,11 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { customerIdHex, name, dob, homeAddress, documentHashHex } = body;
 
-    if (!customerIdHex || !name || !dob || !homeAddress || !documentHashHex) {
+    // Extract frontend inputs
+    const { customer, name, dob, homeAddress } = body;
+
+    if (!customer || !name || !dob || !homeAddress) {
       return {
         statusCode: 400,
         headers: corsHeaders(),
@@ -40,14 +45,20 @@ exports.handler = async (event) => {
       };
     }
 
+    // Auto-generate document hash for frontend verification
+    const documentHash = ethers.keccak256(
+      ethers.toUtf8Bytes(`${customer}|${name}|${dob}|${homeAddress}`)
+    );
+
+    // Get fee from contract
     const fee = await contract.verificationFee();
 
+    // New Solidity function: submitKYC(address, name, dob, homeAddress)
     const tx = await contract.submitKYC(
-      customerIdHex,
+      customer,
       name,
       dob,
       homeAddress,
-      documentHashHex,
       { value: fee }
     );
 
@@ -58,15 +69,20 @@ exports.handler = async (event) => {
       headers: corsHeaders(),
       body: JSON.stringify({
         message: "KYC submitted successfully",
-        txHash: receipt.hash
+        txHash: receipt.hash,
+        documentHash
       })
     };
+
   } catch (err) {
     console.error("submitdkyc error:", err);
+
     return {
       statusCode: 500,
       headers: corsHeaders(),
-      body: JSON.stringify({ error: err.reason || err.message })
+      body: JSON.stringify({
+        error: err.reason || err.shortMessage || err.message
+      })
     };
   }
 };

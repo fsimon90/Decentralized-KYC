@@ -65,31 +65,32 @@ contract DecentralizedKYC {
 
     // -------- KYC SUBMISSION (Auto hash) --------
     function submitKYC(
-        string memory _name,
-        string memory _dob,
-        string memory _homeAddress
-    ) external payable {
-        require(msg.value >= verificationFee, "Insufficient ETH sent for KYC submission.");
-        require(customers[msg.sender].documentHash == bytes32(0), "KYC already submitted.");
+    address customer,
+    string memory _name,
+    string memory _dob,
+    string memory _homeAddress
+) external payable {
+    require(customer != address(0), "Invalid address");
+    require(msg.value >= verificationFee, "Insufficient ETH sent for KYC");
+    require(customers[customer].documentHash == bytes32(0), "KYC already exists");
 
-        // ✅ Auto-generate hash based on user details + address
-        bytes32 autoHash = keccak256(
-            abi.encodePacked(_name, _dob, _homeAddress, msg.sender, block.timestamp)
-        );
+    bytes32 autoHash = keccak256(
+        abi.encodePacked(_name, _dob, _homeAddress, customer, block.timestamp)
+    );
 
-        customers[msg.sender] = CustomerInfo({
-            name: _name,
-            dob: _dob,
-            homeAddress: _homeAddress,
-            documentHash: autoHash,
-            isVerified: false
-        });
+    customers[customer] = CustomerInfo({
+        name: _name,
+        dob: _dob,
+        homeAddress: _homeAddress,
+        documentHash: autoHash,
+        isVerified: false
+    });
 
-        deposits[msg.sender] += msg.value;
+    deposits[customer] += msg.value;
 
-        emit KYCSubmitted(msg.sender, autoHash);
-        emit DepositReceived(msg.sender, msg.value);
-    }
+    emit KYCSubmitted(customer, autoHash);
+}
+
 
     // -------- VERIFICATION --------
     function verifyKYC(address _customer) external onlyValidator customerExists(_customer) {
@@ -137,24 +138,28 @@ contract DecentralizedKYC {
         );
     }
 
-    // -------- UPDATE KYC (Auto hash refresh) --------
-    function updateKYC(
-        string memory _name,
-        string memory _dob,
-        string memory _homeAddress
-    ) external payable {
-        require(customers[msg.sender].documentHash != bytes32(0), "No existing record");
+    // -------- UPDATE KYC (Auto hash refresh using customer address) --------
+function updateKYC(
+    address customer,
+    string memory _name,
+    string memory _dob,
+    string memory _homeAddress
+) external payable {
+    require(customer != address(0), "Invalid address");
+    require(customers[customer].documentHash != bytes32(0), "No existing record");
 
-        // ✅ Recompute hash when user updates details
-        bytes32 newHash = keccak256(
-            abi.encodePacked(_name, _dob, _homeAddress, msg.sender, block.timestamp)
-        );
+    require(msg.value >= verificationFee, "Insufficient ETH for KYC update.");
+    deposits[customer] += msg.value;
 
-        customers[msg.sender].name = _name;
-        customers[msg.sender].dob = _dob;
-        customers[msg.sender].homeAddress = _homeAddress;
-        customers[msg.sender].documentHash = newHash;
-    }
+    bytes32 newHash = keccak256(
+        abi.encodePacked(_name, _dob, _homeAddress, customer, block.timestamp)
+    );
+
+    customers[customer].name = _name;
+    customers[customer].dob = _dob;
+    customers[customer].homeAddress = _homeAddress;
+    customers[customer].documentHash = newHash;
+}
 
     // -------- ETH HANDLING --------
     receive() external payable {
