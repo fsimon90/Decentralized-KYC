@@ -3,19 +3,19 @@
 # -------------------------------------------------
 FROM node:18-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy only package files first (for caching dependencies)
+# Copy package files
 COPY dkyc-frontend/package*.json ./dkyc-frontend/
 
-# Install dependencies
-RUN cd dkyc-frontend && npm install
+# Install all dependencies INCLUDING devDependencies
+ENV NODE_ENV=development
+RUN cd dkyc-frontend && npm install --include=dev
 
-# Copy rest of the frontend project
+# Copy the rest of the project
 COPY dkyc-frontend ./dkyc-frontend
 
-# Build the Vite React app
+# Build the Vite project
 RUN cd dkyc-frontend && npm run build
 
 
@@ -25,17 +25,10 @@ RUN cd dkyc-frontend && npm run build
 # -------------------------------------------------
 FROM nginx:stable-alpine
 
-# Remove default nginx static files
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy built frontend files from the builder stage
 COPY --from=builder /app/dkyc-frontend/dist /usr/share/nginx/html
 
-# Copy custom nginx config (Optional if you want SPA routing)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80
 EXPOSE 80
 
-# Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
