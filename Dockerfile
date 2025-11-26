@@ -8,14 +8,16 @@ WORKDIR /app
 # Copy package files
 COPY dkyc-frontend/package*.json ./dkyc-frontend/
 
-# Install all dependencies INCLUDING devDependencies
-ENV NODE_ENV=development
+# Install dependencies including devDependencies
 RUN cd dkyc-frontend && npm install --include=dev
 
-# Copy the rest of the project
+# Copy source
 COPY dkyc-frontend ./dkyc-frontend
 
-# Build the Vite project
+# FIX: Ensure vite binary is executable (Windows CRLF issue)
+RUN chmod -R +x dkyc-frontend/node_modules/.bin
+
+# Build app
 RUN cd dkyc-frontend && npm run build
 
 
