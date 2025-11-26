@@ -125,7 +125,7 @@ export default function CustomerPage() {
         onClick={handleSubmit}
         style={{
           marginTop: "20px",
-          backgroundColor: "#698cffff",
+          backgroundColor: "#73ff69ff",
           border: "none",
           padding: "8px 20px",
           color: "white",
