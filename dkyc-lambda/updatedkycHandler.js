@@ -1,70 +1,57 @@
-// updatedkycHandler.js  (CommonJS version)
-
 const { ethers } = require("ethers");
 const abi = require("./abi.json");
 
-exports.handler = async (event) => {
-  console.log("Incoming event:", event);
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, wallet);
 
-  try {
-    // ---------- Parse body ----------
-    const body = JSON.parse(event.body || "{}");
-    const { customer, name, dob, homeAddress } = body;
-
-    if (!customer || !name || !dob || !homeAddress) {
-      return {
-        statusCode: 400,
-        headers: cors(),
-        body: JSON.stringify({ error: "Missing required fields" }),
-      };
-    }
-
-    // ---------- Connect to Ethereum ----------
-    const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-
-    const contract = new ethers.Contract(
-      process.env.CONTRACT_ADDRESS,
-      abi,
-      wallet
-    );
-
-    // ---------- Update KYC (pay the fee) ----------
-    const tx = await contract.updateKYC(
-      customer,
-      name,
-      dob,
-      homeAddress,
-      { value: ethers.parseEther("0.01") } // send fee
-    );
-
-    console.log("TX sent:", tx.hash);
-    await tx.wait();
-
-    return {
-      statusCode: 200,
-      headers: cors(),
-      body: JSON.stringify({
-        message: "KYC updated successfully",
-        txHash: tx.hash,
-      }),
-    };
-  } catch (err) {
-    console.error("updateKYC error:", err);
-
-    return {
-      statusCode: 500,
-      headers: cors(),
-      body: JSON.stringify({ error: err.message }),
-    };
-  }
-};
-
-// ---------- CORS Helper ----------
-function cors() {
+function response(statusCode, body) {
   return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "OPTIONS,POST"
+    },
+    body: JSON.stringify(body)
   };
 }
+
+exports.handler = async (event) => {
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  if (method === "OPTIONS") {
+    return response(200, { ok: true });
+  }
+
+  try {
+    if (!event.body) {
+      return response(400, { error: "Missing request body" });
+    }
+
+    const body = typeof event.body === "string" ? JSON.parse(event.body) : event.body;
+
+    const tx = await contract.updateKYC(
+      body.customer,
+      body.name,
+      body.dob,
+      body.homeAddress,
+      body.documentHash,
+      body.fileKey,
+      { value: ethers.parseEther("0.01") }
+    );
+
+    await tx.wait();
+    return response(200, { message: "KYC updated" });
+  } catch (err) {
+    console.error("update-dkyc error:", err);
+    const message =
+      err?.reason ||
+      err?.shortMessage ||
+      err?.error?.message ||
+      err?.message ||
+      "Update KYC failed";
+    const status = message.toLowerCase().includes("revert") ? 400 : 500;
+    return response(status, { error: message });
+  }
+};

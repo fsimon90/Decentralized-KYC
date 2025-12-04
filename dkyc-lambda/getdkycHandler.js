@@ -1,92 +1,58 @@
 // getdkycHandler.js
+// Lambda for GET /get-dkyc?customer=0x...
+
 const { ethers } = require("ethers");
 const abi = require("./abi.json");
 
-let provider, wallet, contract;
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, wallet);
 
-function init() {
-  if (contract) return;
-
-  const RPC_URL = process.env.RPC_URL;
-  const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-  let PRIVATE_KEY = process.env.PRIVATE_KEY;
-
-  if (!RPC_URL) throw new Error("Missing RPC_URL");
-  if (!CONTRACT_ADDRESS) throw new Error("Missing CONTRACT_ADDRESS");
-  if (!PRIVATE_KEY) throw new Error("Missing PRIVATE_KEY");
-
-  if (!PRIVATE_KEY.startsWith("0x")) PRIVATE_KEY = "0x" + PRIVATE_KEY;
-
-  provider = new ethers.JsonRpcProvider(RPC_URL);
-  wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-  contract = new ethers.Contract(CONTRACT_ADDRESS, abi, wallet);
-}
-
-function corsHeaders() {
+function response(statusCode, body) {
   return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+    },
+    body: JSON.stringify(body)
   };
 }
 
 exports.handler = async (event) => {
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  if (method === "OPTIONS") {
+    return response(200, { ok: true });
+  }
+
   try {
-    init();
-
-    const method =
-      event.requestContext?.http?.method || event.httpMethod || "GET";
-
-    if (method === "OPTIONS") {
-      return { statusCode: 200, headers: corsHeaders(), body: "" };
-    }
-
-    let qs =
-      event.queryStringParameters ||
-      (event.rawQueryString
-        ? Object.fromEntries(new URLSearchParams(event.rawQueryString))
-        : {});
-
-    const customer = qs.address || qs.customer;
+    const qs = event.queryStringParameters || {};
+    const customer = qs.customer || qs.address;
 
     if (!customer) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders(),
-        body: JSON.stringify({ error: "Missing query param ?address=0x..." })
-      };
+      return response(400, { error: "Missing 'customer' query parameter." });
     }
 
-    if (!ethers.isAddress(customer)) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders(),
-        body: JSON.stringify({ error: "Invalid address" })
-      };
-    }
+    const kyc = await contract.getKYCInfo(customer);
 
-    const info = await contract.getKYCInfo(customer);
-
+    // ethers v6 returns both array and named fields
     const result = {
-      name: info[0],
-      dob: info[1],
-      homeAddress: info[2],
-      documentHash: info[3],
-      isVerified: info[4],
-      customer
+      name: kyc.name,
+      dob: kyc.dob,
+      homeAddress: kyc.homeAddress,
+      documentHash: kyc.documentHash,
+      fileKey: kyc.fileKey,
+      isVerified: kyc.isVerified
     };
 
-    return {
-      statusCode: 200,
-      headers: corsHeaders(),
-      body: JSON.stringify(result)
-    };
+    return response(200, {
+      customer,
+      kyc: result
+    });
   } catch (err) {
-    console.error("getdkyc error:", err);
-    return {
-      statusCode: 500,
-      headers: corsHeaders(),
-      body: JSON.stringify({ error: err.reason || err.message })
-    };
+    console.error("get-dkyc error:", err);
+    return response(500, { error: err.reason || err.message || "Get KYC failed" });
   }
 };

@@ -10,7 +10,8 @@ contract DecentralizedKYC {
         string name;
         string dob;
         string homeAddress;
-        bytes32 documentHash; // ✅ Auto-generated hash for on-chain proof
+        bytes32 documentHash;     // Hash of uploaded file (SHA-256)
+        string fileKey;           // <-- NEW: S3 file path (e.g., uploads/1234.pdf)
         bool isVerified;
     }
 
@@ -22,7 +23,7 @@ contract DecentralizedKYC {
     // -------- EVENTS --------
     event ValidatorAdded(address indexed validator);
     event ValidatorRemoved(address indexed validator);
-    event KYCSubmitted(address indexed customer, bytes32 documentHash);
+    event KYCSubmitted(address indexed customer, bytes32 documentHash, string fileKey);
     event KYCVerified(address indexed validator, address indexed customer);
     event AccessGranted(address indexed customer, address indexed bank);
     event AccessRevoked(address indexed customer, address indexed bank);
@@ -63,37 +64,49 @@ contract DecentralizedKYC {
         emit ValidatorRemoved(_validator);
     }
 
-    // -------- KYC SUBMISSION (Auto hash) --------
+    // --------------------------------------------------
+    // -------- KYC SUBMISSION WITH FILE SUPPORT --------
+    // --------------------------------------------------
     function submitKYC(
-    address customer,
-    string memory _name,
-    string memory _dob,
-    string memory _homeAddress
-) external payable {
-    require(customer != address(0), "Invalid address");
-    require(msg.value >= verificationFee, "Insufficient ETH sent for KYC");
-    require(customers[customer].documentHash == bytes32(0), "KYC already exists");
+        address customer,
+        string memory _name,
+        string memory _dob,
+        string memory _homeAddress,
+        bytes32 _documentHash,     // NEW: File hash from Lambda
+        string memory _fileKey     // NEW: S3 file key
+    ) external payable {
+        require(customer != address(0), "Invalid address");
+        require(msg.value >= verificationFee, "Insufficient ETH sent for KYC");
+        require(customers[customer].documentHash == bytes32(0), "KYC already exists");
 
-    bytes32 autoHash = keccak256(
-        abi.encodePacked(_name, _dob, _homeAddress, customer, block.timestamp)
-    );
+        // fallback old behavior only if no hash is provided
+        bytes32 finalHash = 
+            _documentHash != bytes32(0)
+                ? _documentHash
+                : keccak256(abi.encodePacked(
+                    _name, _dob, _homeAddress, customer, block.timestamp
+                ));
 
-    customers[customer] = CustomerInfo({
-        name: _name,
-        dob: _dob,
-        homeAddress: _homeAddress,
-        documentHash: autoHash,
-        isVerified: false
-    });
+        customers[customer] = CustomerInfo({
+            name: _name,
+            dob: _dob,
+            homeAddress: _homeAddress,
+            documentHash: finalHash,
+            fileKey: _fileKey,
+            isVerified: false
+        });
 
-    deposits[customer] += msg.value;
+        deposits[customer] += msg.value;
 
-    emit KYCSubmitted(customer, autoHash);
-}
-
+        emit KYCSubmitted(customer, finalHash, _fileKey);
+    }
 
     // -------- VERIFICATION --------
-    function verifyKYC(address _customer) external onlyValidator customerExists(_customer) {
+    function verifyKYC(address _customer) 
+        external 
+        onlyValidator 
+        customerExists(_customer) 
+    {
         require(!customers[_customer].isVerified, "KYC already verified.");
         customers[_customer].isVerified = true;
         emit KYCVerified(msg.sender, _customer);
@@ -112,7 +125,9 @@ contract DecentralizedKYC {
         emit AccessRevoked(msg.sender, _bank);
     }
 
-    // -------- GET KYC INFO --------
+    // --------------------------------------------------
+    // -------- GET KYC INFO (Banker Page) --------------
+    // --------------------------------------------------
     function getKYCInfo(address _customer)
         external
         view
@@ -121,6 +136,7 @@ contract DecentralizedKYC {
             string memory dob,
             string memory homeAddress,
             bytes32 documentHash,
+            string memory fileKey,        // <-- NEW: return S3 path
             bool isVerified
         )
     {
@@ -128,38 +144,50 @@ contract DecentralizedKYC {
             accessPermissions[_customer][msg.sender] || msg.sender == _customer,
             "Access denied."
         );
+
         CustomerInfo memory customer = customers[_customer];
+
         return (
             customer.name,
             customer.dob,
             customer.homeAddress,
             customer.documentHash,
+            customer.fileKey,
             customer.isVerified
         );
     }
 
-    // -------- UPDATE KYC (Auto hash refresh using customer address) --------
-function updateKYC(
-    address customer,
-    string memory _name,
-    string memory _dob,
-    string memory _homeAddress
-) external payable {
-    require(customer != address(0), "Invalid address");
-    require(customers[customer].documentHash != bytes32(0), "No existing record");
+    // --------------------------------------------------
+    // -------- UPDATE KYC WITH NEW FILE ----------------
+    // --------------------------------------------------
+    function updateKYC(
+        address customer,
+        string memory _name,
+        string memory _dob,
+        string memory _homeAddress,
+        bytes32 _documentHash,     // allow new file
+        string memory _fileKey     // allow new S3 key
+    ) external payable {
+        require(customer != address(0), "Invalid address");
+        require(customers[customer].documentHash != bytes32(0), "No existing record");
+        require(msg.value >= verificationFee, "Insufficient ETH for KYC update.");
 
-    require(msg.value >= verificationFee, "Insufficient ETH for KYC update.");
-    deposits[customer] += msg.value;
+        deposits[customer] += msg.value;
 
-    bytes32 newHash = keccak256(
-        abi.encodePacked(_name, _dob, _homeAddress, customer, block.timestamp)
-    );
+        // If new hash isn't provided → generate fresh auto hash
+        bytes32 newHash =
+            _documentHash != bytes32(0)
+                ? _documentHash
+                : keccak256(
+                    abi.encodePacked(_name, _dob, _homeAddress, customer, block.timestamp)
+                );
 
-    customers[customer].name = _name;
-    customers[customer].dob = _dob;
-    customers[customer].homeAddress = _homeAddress;
-    customers[customer].documentHash = newHash;
-}
+        customers[customer].name = _name;
+        customers[customer].dob = _dob;
+        customers[customer].homeAddress = _homeAddress;
+        customers[customer].documentHash = newHash;
+        customers[customer].fileKey = _fileKey; // update file path too
+    }
 
     // -------- ETH HANDLING --------
     receive() external payable {

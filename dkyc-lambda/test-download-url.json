@@ -1,0 +1,15 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /download-url",
+  "rawPath": "/download-url",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST"
+    }
+  },
+  "body": "{\"key\":\"uploads/sample-file.pdf\"}",
+  "isBase64Encoded": false
+}

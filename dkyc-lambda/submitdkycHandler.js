@@ -1,96 +1,57 @@
-// submitdkycHandler.js
-// Updated to support customer address as input (Metamask address)
-
 const { ethers } = require("ethers");
 const abi = require("./abi.json");
 
-let provider, wallet, contract;
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, wallet);
 
-function init() {
-  if (contract) return;
-
-  const RPC_URL = process.env.RPC_URL;
-  const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-  let PRIVATE_KEY = process.env.PRIVATE_KEY;
-
-  if (!RPC_URL || !CONTRACT_ADDRESS || !PRIVATE_KEY) {
-    throw new Error("Missing environment variables");
-  }
-
-  if (!PRIVATE_KEY.startsWith("0x")) PRIVATE_KEY = "0x" + PRIVATE_KEY;
-
-  provider = new ethers.JsonRpcProvider(RPC_URL);
-  wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-  contract = new ethers.Contract(CONTRACT_ADDRESS, abi, wallet);
+function response(statusCode, body) {
+  return {
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "OPTIONS,POST"
+    },
+    body: JSON.stringify(body)
+  };
 }
 
 exports.handler = async (event) => {
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  if (method === "OPTIONS") {
+    return response(200, { ok: true });
+  }
+
   try {
-    init();
-
-    if (event.httpMethod === "OPTIONS") {
-      return { statusCode: 200, headers: corsHeaders(), body: "" };
+    if (!event.body) {
+      return response(400, { error: "Missing request body" });
     }
 
-    const body = JSON.parse(event.body || "{}");
+    const body = typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
-    // Extract frontend inputs
-    const { customer, name, dob, homeAddress } = body;
-
-    if (!customer || !name || !dob || !homeAddress) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders(),
-        body: JSON.stringify({ error: "Missing required fields" })
-      };
-    }
-
-    // Auto-generate document hash for frontend verification
-    const documentHash = ethers.keccak256(
-      ethers.toUtf8Bytes(`${customer}|${name}|${dob}|${homeAddress}`)
-    );
-
-    // Get fee from contract
-    const fee = await contract.verificationFee();
-
-    // New Solidity function: submitKYC(address, name, dob, homeAddress)
     const tx = await contract.submitKYC(
-      customer,
-      name,
-      dob,
-      homeAddress,
-      { value: fee }
+      body.customer,
+      body.name,
+      body.dob,
+      body.homeAddress,
+      body.documentHash,
+      body.fileKey,
+      { value: ethers.parseEther("0.01") }
     );
 
-    const receipt = await tx.wait();
-
-    return {
-      statusCode: 200,
-      headers: corsHeaders(),
-      body: JSON.stringify({
-        message: "KYC submitted successfully",
-        txHash: receipt.hash,
-        documentHash
-      })
-    };
-
+    await tx.wait();
+    return response(200, { message: "KYC submitted" });
   } catch (err) {
-    console.error("submitdkyc error:", err);
-
-    return {
-      statusCode: 500,
-      headers: corsHeaders(),
-      body: JSON.stringify({
-        error: err.reason || err.shortMessage || err.message
-      })
-    };
+    console.error("submit-dkyc error:", err);
+    const message =
+      err?.reason ||
+      err?.shortMessage ||
+      err?.error?.message ||
+      err?.message ||
+      "Submit KYC failed";
+    const status = message.toLowerCase().includes("revert") ? 400 : 500;
+    return response(status, { error: message });
   }
 };
-
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
-  };
-}

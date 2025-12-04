@@ -1,96 +1,58 @@
-/// **** index.js for DKYC-Lambda (Single Lambda Version) *** ///
-
-const { ethers } = require("ethers");
-const abi = require("./abi.json");
-
-// ---------------------
-// Blockchain Setup
-// ---------------------
-const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, wallet);
-
-// Helper response with CORS
-function res(code, body) {
-  return {
-    statusCode: code,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-    body: JSON.stringify(body),
-  };
-}
+const submitKyc = require("./submitdkycHandler");
+const updateKyc = require("./updatedkycHandler");
+const getKyc = require("./getdkycHandler");
+const uploadUrl = require("./upload-url");
+const downloadUrl = require("./download-url");
+const { corsHeaders } = require("./cors");
 
 exports.handler = async (event) => {
+  console.log("Incoming event:", JSON.stringify(event));
+
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  const rawPath = event.rawPath || event.path || "";
+  const routeKey = `${method} ${rawPath}`;
+
+  // Global CORS preflight handler
+  if (method === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: corsHeaders(),
+      body: ""
+    };
+  }
+
   try {
-    const { httpMethod, path } = event;
+    switch (routeKey) {
+      case "POST /submit-dkyc":
+        return await submitKyc.handler(event);
 
-    // ---------------------------
-    // SUBMIT KYC  (POST)
-    // ---------------------------
-    if (path.endsWith("/submit-dkyc") && httpMethod === "POST") {
-      const body = JSON.parse(event.body);
-      const { name, dob, homeAddress, documentHash } = body;
+      case "POST /update-dkyc":
+        return await updateKyc.handler(event);
 
-      if (!name || !dob || !homeAddress || !documentHash)
-        return res(400, { error: "Missing required fields" });
+      case "GET /get-dkyc":
+        return await getKyc.handler(event);
 
-      const tx = await contract.submitKYC(
-        name,
-        dob,
-        homeAddress,
-        ethers.getBytes(documentHash),
-        { value: ethers.parseEther("0.01") }
-      );
+      case "POST /upload-url":
+      case "POST /get-upload-url": // legacy
+        return await uploadUrl.handler(event);
 
-      const r = await tx.wait();
-      return res(200, { message: "KYC submitted", tx: r.hash });
+      case "POST /download-url":
+        return await downloadUrl.handler(event);
+
+      default:
+        console.warn("Unknown route:", routeKey);
+        return {
+          statusCode: 404,
+          headers: corsHeaders(),
+          body: JSON.stringify({ error: `Route not found: ${routeKey}` })
+        };
     }
-
-    // ---------------------------
-    // UPDATE KYC  (PUT)
-    // ---------------------------
-    if (path.endsWith("/update-dkyc") && httpMethod === "PUT") {
-      const body = JSON.parse(event.body);
-      const { name, dob, homeAddress, documentHash } = body;
-
-      const tx = await contract.updateKYC(
-        name,
-        dob,
-        homeAddress,
-        ethers.getBytes(documentHash),
-        { value: ethers.parseEther("0.01") }
-      );
-
-      const r = await tx.wait();
-      return res(200, { message: "KYC updated", tx: r.hash });
-    }
-
-    // ---------------------------
-    // GET KYC  (GET)
-    // ---------------------------
-    if (path.endsWith("/get-dkyc") && httpMethod === "GET") {
-      const q = event.queryStringParameters || {};
-      const customer = q.address || q.customer;
-
-      if (!customer) return res(400, { error: "Missing ?address=" });
-
-      const r = await contract.getKYCInfo(customer);
-
-      return res(200, {
-        name: r.name,
-        dob: r.dob,
-        homeAddress: r.homeAddress,
-        documentHash: r.documentHash,
-        isVerified: r.isVerified,
-      });
-    }
-
-    return res(404, { error: "Invalid route" });
-  } catch (e) {
-    console.error("ERR:", e);
-    return res(500, { error: e.message });
+  } catch (err) {
+    console.error("Top-level error:", err);
+    return {
+      statusCode: 500,
+      headers: corsHeaders(),
+      body: JSON.stringify({ error: err.message || "Internal server error" })
+    };
   }
 };
